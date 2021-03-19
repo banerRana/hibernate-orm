@@ -78,6 +78,7 @@ dependencies {
 
 	//Databases
 	testRuntime( libraries.h2 )
+	testRuntime( libraries.derby )
 	testRuntime( libraries.hsqldb )
 	testRuntime( libraries.postgresql )
 	testRuntime( libraries.mysql )
@@ -89,13 +90,15 @@ dependencies {
 
 	asciidoclet 'org.asciidoctor:asciidoclet:1.+'
 
-	if ( db.equalsIgnoreCase( 'oracle' ) || db.equalsIgnoreCase( 'oracle_docker' ) ) {
-		testRuntime( libraries.oracle )
-	}
-	else if ( db.equalsIgnoreCase( 'db2' ) ) {
+	testRuntime( libraries.oracle )
+
+	// Since both the DB2 driver and HANA have a package "net.jpountz" we have to add dependencies conditionally
+	// This is due to the "no split-packages" requirement of Java 9+
+
+	if ( db.startsWith( 'db2' ) ) {
 		testRuntime( libraries.db2 )
 	}
-	else if ( db.equalsIgnoreCase( 'hana' ) ) {
+	else if ( db.startsWith( 'hana' ) ) {
 		testRuntime( libraries.hana )
 	}
 
@@ -229,7 +232,7 @@ if ( gradle.ext.javaToolchainEnabled ) {
 		}
 
 		// Configure JVM Options
-		jvmArgs.addAll( getProperty( 'toolchain.launcher.jvmargs' ).toString().split( ' ' ) )
+		jvmArgs( getProperty( 'toolchain.launcher.jvmargs' ).toString().split( ' ' ) )
 
 		// Display version of Java tools
 		doFirst {
@@ -284,11 +287,13 @@ test {
 	systemProperty 'user.country', 'US'
 	systemProperty 'user.timezone', 'UTC'
 	systemProperty 'file.encoding', 'UTF-8'
+	// Needed for AdoptOpenJDK on alpine? The problem is similar to this: https://github.com/mockito/mockito/issues/978
+	jvmArgs '-XX:+StartAttachListener'
 }
 
-// Enable the experimental features of ByteBuddy with JDK 15+
+// Enable the experimental features of ByteBuddy with JDK 18+
 test {
-	if ( gradle.ext.javaVersions.test.release.asInt() >= 15 ) {
+	if ( gradle.ext.javaVersions.test.release.asInt() >= 18 ) {
 		logger.warn( "The version of Java bytecode that will be tested is not supported by Bytebuddy by default. " +
 				 " Setting 'net.bytebuddy.experimental=true'." )
 		systemProperty 'net.bytebuddy.experimental', true

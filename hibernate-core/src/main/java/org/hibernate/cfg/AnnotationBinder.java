@@ -1500,8 +1500,7 @@ public final class AnnotationBinder {
 			MetadataBuildingContext context) {
 		int idPropertyCounter = 0;
 
-		Collection<XProperty> properties = propertyContainer.getProperties();
-		for ( XProperty p : properties ) {
+		for ( XProperty p : propertyContainer.propertyIterator() ) {
 			final int currentIdPropertyCounter = addProperty(
 					propertyContainer,
 					p,
@@ -3163,7 +3162,8 @@ public final class AnnotationBinder {
 		}
 		else {
 			toOne.setLazy( fetchType == FetchType.LAZY );
-			toOne.setUnwrapProxy( false );
+			toOne.setUnwrapProxy( fetchType != FetchType.LAZY );
+			toOne.setUnwrapProxyImplicit( true );
 		}
 		if ( fetch != null ) {
 			if ( fetch.value() == org.hibernate.annotations.FetchMode.JOIN ) {

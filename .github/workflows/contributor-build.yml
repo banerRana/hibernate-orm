@@ -9,11 +9,11 @@ name: Hibernate ORM build
 on:
   push:
     branches:
-      - 'master'
+      - 'main'
       - 'wip/6.0'
   pull_request:
     branches:
-      - 'master'
+      - 'main'
       - 'wip/6.0'
 jobs:
   build:
@@ -43,6 +43,8 @@ jobs:
             experimental: true
     steps:
       - uses: actions/checkout@v2
+      - name: Reclaim Disk Space
+        run: .github/ci-prerequisites.sh
       - name: Set up Java 8
         uses: actions/setup-java@v1
         with:
@@ -72,7 +74,9 @@ jobs:
         if: failure()
         with:
           name: test-reports-java8-${{ matrix.rdbms }}
-          path: './**/target/reports/tests/test/'
+          path: |
+            ./**/target/reports/tests/
+            ./**/target/reports/checkstyle/
       - name: Omit produced artifacts from build cache
         run: ./ci/before-cache.sh
   build11:
@@ -109,6 +113,8 @@ jobs:
         if: failure()
         with:
           name: test-reports-java11
-          path: './**/target/reports/tests/test/'
+          path: |
+            ./**/target/reports/tests/
+            ./**/target/reports/checkstyle/
       - name: Omit produced artifacts from build cache
         run: ./ci/before-cache.sh

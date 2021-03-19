@@ -69,6 +69,10 @@ import org.hibernate.TypeHelper;
 import org.hibernate.TypeMismatchException;
 import org.hibernate.UnknownProfileException;
 import org.hibernate.UnresolvableObjectException;
+import org.hibernate.bytecode.enhance.spi.interceptor.BytecodeLazyAttributeInterceptor;
+import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementAsProxyLazinessInterceptor;
+import org.hibernate.bytecode.enhance.spi.interceptor.LazyAttributeLoadingInterceptor;
+import org.hibernate.bytecode.spi.BytecodeEnhancementMetadata;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.criterion.NaturalIdentifier;
 import org.hibernate.engine.internal.StatefulPersistenceContext;
@@ -87,6 +91,8 @@ import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.NamedQueryDefinition;
 import org.hibernate.engine.spi.PersistenceContext;
+import org.hibernate.engine.spi.PersistentAttributeInterceptable;
+import org.hibernate.engine.spi.PersistentAttributeInterceptor;
 import org.hibernate.engine.spi.QueryParameters;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
@@ -377,8 +383,7 @@ public class SessionImpl
 			}
 			else {
 				//Otherwise, session auto-close will be enabled by shouldAutoCloseSession().
-				waitingForAutoClose = true;
-				closed = true;
+				prepareForAutoClose();
 			}
 		}
 		else {
@@ -1523,7 +1528,7 @@ public class SessionImpl
 		queryParameters.validateParameters();
 
 		HQLQueryPlan plan = queryParameters.getQueryPlan();
-		if ( plan == null ) {
+		if ( plan == null || !plan.isShallow() ) {
 			plan = getQueryPlan( query, true );
 		}
 
@@ -2777,7 +2782,11 @@ public class SessionImpl
 			if ( this.lockOptions != null ) {
 				LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), lockOptions, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
 				fireLoad( event, LoadEventListener.GET );
-				return (T) event.getResult();
+
+				final Object result = event.getResult();
+				initializeIfNecessary( result );
+
+				return (T) result;
 			}
 
 			LoadEvent event = new LoadEvent( id, entityPersister.getEntityName(), false, SessionImpl.this, getReadOnlyFromLoadQueryInfluencers() );
@@ -2792,7 +2801,36 @@ public class SessionImpl
 			finally {
 				afterOperation( success );
 			}
-			return (T) event.getResult();
+
+			final Object result = event.getResult();
+			initializeIfNecessary( result );
+
+			return (T) result;
+		}
+
+		private void initializeIfNecessary(Object result) {
+			if ( result == null ) {
+				return;
+			}
+
+			if ( result instanceof HibernateProxy ) {
+				final HibernateProxy hibernateProxy = (HibernateProxy) result;
+				final LazyInitializer initializer = hibernateProxy.getHibernateLazyInitializer();
+				if ( initializer.isUninitialized() ) {
+					initializer.initialize();
+				}
+				return;
+			}
+
+			final BytecodeEnhancementMetadata enhancementMetadata = entityPersister.getEntityMetamodel().getBytecodeEnhancementMetadata();
+			if ( ! enhancementMetadata.isEnhancedForLazyLoading() ) {
+				return;
+			}
+
+			final BytecodeLazyAttributeInterceptor interceptor = enhancementMetadata.extractLazyInterceptor(result);
+			if ( interceptor instanceof EnhancementAsProxyLazinessInterceptor ) {
+				( (EnhancementAsProxyLazinessInterceptor) interceptor ).forceInitialize( result, null );
+			}
 		}
 	}
 

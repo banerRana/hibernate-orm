@@ -1434,8 +1434,8 @@ public abstract class AbstractProducedQuery<R> implements QueryImplementor<R> {
 			);
 		}
 
-	QueryParameters queryParameters = new QueryParameters(
-			getQueryParameterBindings(),
+		QueryParameters queryParameters = new QueryParameters(
+				getQueryParameterBindings(),
 				getLockOptions(),
 				queryOptions,
 				true,
@@ -1450,11 +1450,22 @@ public abstract class AbstractProducedQuery<R> implements QueryImplementor<R> {
 				optionalId,
 				resultTransformer
 		);
-		queryParameters.setQueryPlan( entityGraphHintedQueryPlan );
+
+		appendQueryPlanToQueryParameters( hql, queryParameters, entityGraphHintedQueryPlan );
+
 		if ( passDistinctThrough != null ) {
 			queryParameters.setPassDistinctThrough( passDistinctThrough );
 		}
 		return queryParameters;
+	}
+
+	protected void appendQueryPlanToQueryParameters(
+			String hql,
+			QueryParameters queryParameters,
+			HQLQueryPlan queryPlan) {
+		if ( queryPlan != null ) {
+			queryParameters.setQueryPlan( queryPlan );
+		}
 	}
 
 	public QueryParameters getQueryParameters() {
@@ -1573,12 +1584,10 @@ public abstract class AbstractProducedQuery<R> implements QueryImplementor<R> {
 		final ScrollableResultsIterator<R> iterator = new ScrollableResultsIterator<>( scrollableResults );
 		final Spliterator<R> spliterator = Spliterators.spliteratorUnknownSize( iterator, Spliterator.NONNULL );
 
-		final Stream<R> stream = new StreamDecorator(
+		return new StreamDecorator<>(
 				StreamSupport.stream( spliterator, false ),
-				scrollableResults::close
+				iterator::close
 		);
-
-		return stream;
 	}
 
 	@Override
@@ -1732,7 +1741,7 @@ public abstract class AbstractProducedQuery<R> implements QueryImplementor<R> {
 				: defaultType;
 	}
 
-	private boolean isSelect() {
+	protected boolean isSelect() {
 		return getProducer().getFactory().getQueryPlanCache()
 				.getHQLQueryPlan( getQueryString(), false, Collections.<String, Filter>emptyMap() )
 				.isSelect();
